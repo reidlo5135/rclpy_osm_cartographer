@@ -1,9 +1,13 @@
 import rclpy
-from xml.etree import ElementTree
+import pyproj
 
+from xml.etree import ElementTree
 from rclpy.node import Node
 from PIL import Image
 from typing import Any
+
+WGS84_CRS = pyproj.CRS("EPSG:4326")
+KTM_CRS = pyproj.CRS("EPSG:5181")
 
 class osm_cartographer(Node):
     __rclpy_node_name__: str = "rclpy_osm_cartographer"
@@ -17,6 +21,7 @@ class osm_cartographer(Node):
             )
         )
         
+        self.__pyproj_transformer__ = pyproj.Transformer.from_crs(WGS84_CRS, KTM_CRS, always_xy=True)
         self.__osm_width__: int = 0
         self.__osm_height__: int = 0
 
@@ -73,15 +78,20 @@ class osm_cartographer(Node):
         osm = xm.getroot()
         
         for el in osm.iterfind('bounds'):
-            min_lat: float = float(self.__get_required_attribute__(el, 'minlat'))
             min_lon: float = float(self.__get_required_attribute__(el, 'minlon'))
-            max_lat: float = float(self.__get_required_attribute__(el, 'maxlat'))
-            max_lon: float = float(self.__get_required_attribute__(el, 'maxlon'))
+            min_lat: float = float(self.__get_required_attribute__(el, 'minlat'))
+            transformed_min_lon, transformed_min_lat = self.__pyproj_transformer__.transform(min_lon, min_lat)
+            self.get_logger().info("{} min_lon : [{}], min_lat : [{}]".format(self.__rclpy_flags__, str(transformed_min_lon), str(transformed_min_lat)))
             
-            width: int = int((max_lon - min_lon) * 100000)
+            max_lon: float = float(self.__get_required_attribute__(el, 'maxlon'))
+            max_lat: float = float(self.__get_required_attribute__(el, 'maxlat'))
+            transformed_max_lon, transformed_max_lat = self.__pyproj_transformer__.transform(max_lon, max_lat)
+            self.get_logger().info("{} max_lon : [{}], max_lat : [{}]".format(self.__rclpy_flags__, str(transformed_max_lon), str(transformed_max_lat)))
+            
+            width: int = int((transformed_max_lon - transformed_min_lon))
             self.__set_osm_width__(width)
             
-            height: int = int((max_lat - min_lat) * 100000)
+            height: int = int((transformed_max_lat - transformed_min_lat))
             self.__set_osm_height__(height)
             
             self.get_logger().info("{} osm width : [{}], height : [{}]".format(self.__rclpy_flags__, str(width), str(height)))
@@ -92,10 +102,16 @@ class osm_cartographer(Node):
             lon: float = float(node.attrib["lon"])
             lat: float = float(node.attrib["lat"])
             
-            self.get_logger().info("{} osm lon : [{}], lat : [{}]".format(self.__rclpy_flags__, str(lon), str(lat)))
+            transformed_lon, transformed_lat = self.__pyproj_transformer__.transform(lon, lat)
+            self.get_logger().info("{} transformed_lon : [{}], transformed_lat : [{}]".format(self.__rclpy_flags__, str(transformed_lon), str(transformed_lat)))
             
-            x: int = int((lon - min_lon) * 100000)
-            y: int = int((lat - min_lat) * 100000)
+            # self.get_logger().info("{} osm lon : [{}], lat : [{}]".format(self.__rclpy_flags__, str(lon), str(lat)))
+            
+            x: int = abs(int((transformed_lon - transformed_min_lon)))
+            y: int = abs(int((transformed_lat - transformed_min_lat)))
+            
+            # x: int = int((lon - min_lon) * 100000)
+            # y: int = int((lat - min_lat) * 100000)
 
             self.get_logger().info("{} osm x : [{}], y : [{}]".format(self.__rclpy_flags__, str(x), str(y)))
             

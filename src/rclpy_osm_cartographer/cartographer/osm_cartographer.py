@@ -98,6 +98,9 @@ class osm_cartographer(Node):
 
         pgm_image = Image.new("L", (self.__get_osm_width__(), self.__get_osm_height__()), 255)
         
+        previous_x: int = None
+        previous_y: int = None
+        
         for node in osm.iter("node"):
             lon: float = float(node.attrib["lon"])
             lat: float = float(node.attrib["lat"])
@@ -116,16 +119,35 @@ class osm_cartographer(Node):
             self.get_logger().info("{} osm x : [{}], y : [{}]".format(self.__rclpy_flags__, str(x), str(y)))
             
             is_way: bool = False
+            
             for tag in node.iter("tag"):
                 if tag.attrib["k"] == "way":
                     is_way = True
                     break
-
+            
             color: int = 255 if is_way else 0
             
             if 0 <= x < self.__get_osm_width__() and 0 <= y < self.__get_osm_height__():
                 pgm_image.putpixel((x, y), color)
+            
+            # if previous_x is not None and previous_y is not None and (x - previous_x) != 0:
+            #     slope = (y - previous_y) / (x - previous_x)
+            #     if abs(slope) <= 1:
+            #         x_range = range(previous_x, x + 1) if x > previous_x else range(x, previous_x + 1)
+            #         for x_point in x_range:
+            #             y_point = int(previous_y + (x_point - previous_x) * slope)
+            #             if 0 <= x_point < self.__get_osm_width__() and 0 <= y_point < self.__get_osm_height__():
+            #                 pgm_image.putpixel((x_point, y_point), color)
+            #     else:
+            #         y_range = range(previous_y, y + 1) if y > previous_y else range(y, previous_y + 1)
+            #         for y_point in y_range:
+            #             x_point = int(previous_x + (y_point - previous_y) / slope)
+            #             if 0 <= x_point < self.__get_osm_width__() and 0 <= y_point < self.__get_osm_height__():
+            #                 pgm_image.putpixel((x_point, y_point), color)
         
+            # previous_x = x
+            # previous_y = y
+
         pgm_file_path = "/home/wavem/ros2_ws/src/rclpy_osm_cartographer/result/test.pgm"
         self.__save_pgm_image__(pgm_image.transpose(Image.FLIP_LEFT_RIGHT), pgm_file_path)
         self.get_logger().info("{} PGM image file created: {}".format(self.__rclpy_flags__, pgm_file_path))
